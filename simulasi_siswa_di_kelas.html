@@ -1,0 +1,1214 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Simulasi Siswa di Kelas - RPG 2D</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=VT323&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #1e293b;
+            font-family: 'Fredoka', sans-serif;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            width: 100vw;
+        }
+        #game-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            max-width: 1100px;
+            max-height: 750px;
+            display: flex;
+            flex-direction: column;
+            background: #0f172a;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+            overflow: hidden;
+        }
+        @media (min-width: 768px) {
+            #game-wrapper {
+                width: 95vw;
+                height: 90vh;
+                border-radius: 20px;
+                border: 4px solid #334155;
+            }
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            image-rendering: pixelated;
+        }
+        /* Animasi tombol virtual */
+        .dpad-btn {
+            background: rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(4px);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            color: white;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            transition: transform 0.08s, background 0.08s;
+            touch-action: manipulation;
+        }
+        .dpad-btn:active, .dpad-btn.active {
+            transform: scale(0.92);
+            background: rgba(255, 255, 255, 0.5);
+        }
+        .action-btn {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            border: 3px solid #fef3c7;
+            color: white;
+            border-radius: 50%;
+            box-shadow: 0 6px 15px rgba(217, 119, 6, 0.5);
+            transition: transform 0.1s;
+            touch-action: manipulation;
+        }
+        .action-btn:active {
+            transform: scale(0.9);
+        }
+        /* Kotak Dialog RPG */
+        #dialog-box {
+            animation: slideUp 0.2s ease-out;
+        }
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-wrapper">
+    <!-- Canvas Utama -->
+    <canvas id="gameCanvas" tabindex="0" class="outline-none"></canvas>
+
+    <!-- HUD Atas: Profil & Misi -->
+    <div class="absolute top-3 left-3 right-3 flex flex-wrap justify-between items-start gap-2 pointer-events-none">
+        <!-- Kartu Siswa -->
+        <div class="bg-slate-900/85 backdrop-blur-md border-2 border-slate-700 rounded-2xl p-2.5 sm:p-3 text-white shadow-lg flex items-center gap-3 pointer-events-auto">
+            <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-red-600 border-2 border-white flex flex-col items-center justify-center overflow-hidden shrink-0 shadow-inner">
+                <div class="w-6 h-3 bg-amber-200 rounded-t-full mt-1"></div>
+                <div class="w-8 h-3 bg-white"></div>
+                <div class="w-8 h-3 bg-slate-600"></div>
+            </div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <span class="font-bold text-sm sm:text-base text-amber-300">Budi Santoso</span>
+                    <span class="text-[10px] sm:text-xs bg-blue-600 px-2 py-0.5 rounded-full font-semibold">IX-A</span>
+                </div>
+                <div class="text-xs text-slate-300 flex items-center gap-1.5 mt-0.5">
+                    <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span id="status-text">Jam Istirahat</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel Misi Mini -->
+        <div class="bg-slate-900/85 backdrop-blur-md border-2 border-slate-700 rounded-2xl p-2.5 sm:p-3 text-white shadow-lg max-w-xs sm:max-w-sm pointer-events-auto">
+            <div class="flex items-center justify-between gap-4 mb-1.5 border-b border-slate-700 pb-1">
+                <span class="text-xs sm:text-sm font-bold text-amber-400 flex items-center gap-1">
+                    📋 Misi Harian Siswa
+                </span>
+                <span id="mission-progress" class="text-xs font-bold bg-emerald-600/40 text-emerald-300 px-2 py-0.5 rounded-full">0/4</span>
+            </div>
+            <ul id="mission-list" class="text-xs sm:text-[13px] space-y-1 text-slate-200">
+                <!-- Diisi lewat JavaScript -->
+            </ul>
+        </div>
+    </div>
+
+    <!-- Petunjuk Tombol di Desktop -->
+    <div id="desktop-hint" class="hidden md:flex absolute bottom-3 left-3 bg-slate-900/75 backdrop-blur-sm border border-slate-700 text-slate-300 text-xs px-3 py-1.5 rounded-xl gap-3 pointer-events-none">
+        <span><kbd class="bg-slate-700 px-1.5 py-0.5 rounded text-white font-mono">WASD</kbd> / <kbd class="bg-slate-700 px-1.5 py-0.5 rounded text-white font-mono">Panah</kbd> Jalan</span>
+        <span><kbd class="bg-slate-700 px-1.5 py-0.5 rounded text-white font-mono">Spasi</kbd> / <kbd class="bg-slate-700 px-1.5 py-0.5 rounded text-white font-mono">Enter</kbd> Interaksi</span>
+    </div>
+
+    <!-- Kontrol Virtual untuk Layar Sentuh / Mobile -->
+    <div id="mobile-controls" class="absolute bottom-4 left-4 right-4 flex justify-between items-end pointer-events-none z-10">
+        <!-- D-Pad Kiri -->
+        <div class="grid grid-cols-3 gap-1.5 w-32 h-32 sm:w-36 sm:h-36 pointer-events-auto opacity-85 hover:opacity-100 transition-opacity">
+            <div></div>
+            <button id="btn-up" class="dpad-btn text-xl" aria-label="Atas">▲</button>
+            <div></div>
+            <button id="btn-left" class="dpad-btn text-xl" aria-label="Kiri">◀</button>
+            <div class="bg-white/10 rounded-xl"></div>
+            <button id="btn-right" class="dpad-btn text-xl" aria-label="Kanan">▶</button>
+            <div></div>
+            <button id="btn-down" class="dpad-btn text-xl" aria-label="Bawah">▼</button>
+            <div></div>
+        </div>
+
+        <!-- Tombol Interaksi Kanan -->
+        <div class="flex flex-col items-center gap-1 pointer-events-auto">
+            <button id="btn-interact" class="action-btn w-16 h-16 sm:w-20 sm:h-20 flex flex-col items-center justify-center font-bold text-xs sm:text-sm">
+                <span class="text-lg sm:text-xl">💬</span>
+                <span>Interaksi</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Kotak Dialog RPG -->
+    <div id="dialog-box" class="hidden absolute bottom-4 left-4 right-4 md:left-1/2 md:-translate-x-1/2 md:w-[680px] bg-slate-900/95 border-4 border-amber-400 rounded-2xl p-4 text-white shadow-2xl z-30">
+        <div class="flex items-center justify-between mb-1.5">
+            <span id="dialog-speaker" class="bg-amber-500 text-slate-950 font-bold text-xs sm:text-sm px-3 py-0.5 rounded-full">
+                Nama Objek / Karakter
+            </span>
+            <span class="text-[11px] text-slate-400">Tekan Spasi / Klik Tutup</span>
+        </div>
+        <p id="dialog-content" class="text-sm sm:text-base leading-relaxed text-slate-100 min-h-[48px] my-1">
+            Isi pesan dialog akan muncul di sini...
+        </p>
+        <div id="dialog-choices" class="flex flex-wrap justify-end gap-2 mt-2">
+            <button id="dialog-close-btn" class="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-semibold text-xs sm:text-sm px-4 py-2 rounded-xl transition cursor-pointer">
+                Lanjutkan ➔
+            </button>
+        </div>
+    </div>
+
+    <!-- Notifikasi Toast (Pencapaian Misi) -->
+    <div id="toast-notif" class="hidden absolute top-24 left-1/2 -translate-x-1/2 bg-emerald-600 border-2 border-emerald-200 text-white px-4 py-2 rounded-full shadow-xl font-semibold text-xs sm:text-sm flex items-center gap-2 z-20 transition-all">
+        <span>🎉</span>
+        <span id="toast-text">Misi Selesai!</span>
+    </div>
+
+    <!-- Modal Selamat Semua Misi Selesai -->
+    <div id="victory-modal" class="hidden absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-40">
+        <div class="bg-slate-900 border-4 border-amber-400 rounded-3xl p-6 max-w-md w-full text-center text-white shadow-2xl">
+            <div class="text-5xl mb-3">🏆</div>
+            <h2 class="text-2xl font-bold text-amber-300 mb-2">Siswa Teladan Kelas IX-A!</h2>
+            <p class="text-sm text-slate-300 mb-5 leading-relaxed">
+                Hebat! Kamu sudah mengumpulkan tugas ke Bu Ratna, mengecek jadwal pelajaran, menjaga kebersihan kelas, dan bersosialisasi dengan teman-teman.
+            </p>
+            <div class="flex gap-3 justify-center">
+                <button id="btn-continue-play" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-5 py-2.5 rounded-xl transition cursor-pointer">
+                    Lanjut Jelajahi Kelas
+                </button>
+                <button id="btn-restart-game" class="bg-slate-700 hover:bg-slate-600 text-white font-bold px-5 py-2.5 rounded-xl transition cursor-pointer">
+                    Ulangi Misi
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+/**
+ * SIMULASI SISWA DI RUANG KELAS (2D TOP-DOWN RPG)
+ * Menggunakan HTML5 Canvas API dengan koordinat dunia virtual (960 x 640)
+ * yang otomatis diskalakan secara responsif ke layar pengguna.
+ */
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// Dimensi dunia ruang kelas virtual (rasio 3:2)
+const WORLD_WIDTH = 960;
+const WORLD_HEIGHT = 640;
+
+// Pengaturan ukuran canvas responsif
+function resizeCanvas() {
+    const wrapper = document.getElementById('game-wrapper');
+    const rect = wrapper.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// Status Misi Permainan
+const missions = [
+    { id: 'board', text: 'Cek jadwal & catatan di Papan Tulis', done: false },
+    { id: 'teacher', text: 'Kumpulkan tugas PR ke Meja Bu Guru', done: false },
+    { id: 'friends', text: 'Sapa minimal 2 teman sekelas (0/2)', done: false, count: 0, target: 2 },
+    { id: 'trash', text: 'Buang sampah kertas ke Tong Sampah', done: false }
+];
+let victoryShown = false;
+
+// Inventaris Sederhana Siswa
+const inventory = {
+    hasHomework: true,
+    hasTrash: true,
+    borrowedPen: false,
+    talkedFriends: new Set()
+};
+
+// State Input Keyboard & Sentuh
+const keys = {
+    up: false,
+    down: false,
+    left: false,
+    right: false
+};
+
+// State Dialog
+const dialogState = {
+    active: false,
+    speaker: '',
+    text: '',
+    onClose: null
+};
+
+// Karakter Utama (Budi - Siswa Seragam Putih Biru/Abu)
+const player = {
+    x: 335,
+    y: 440,
+    width: 30,
+    height: 36,
+    speed: 3.4,
+    dir: 'up', // 'up', 'down', 'left', 'right'
+    walkFrame: 0,
+    isMoving: false,
+    name: 'Budi',
+    skinColor: '#f5cba7',
+    hairColor: '#1c1917',
+    shirtColor: '#ffffff',
+    pantsColor: '#334155'
+};
+
+// Daftar Objek Furnitur & Kolisi di Ruang Kelas
+const obstacles = [
+    // Papan Tulis Hijau (Dinding Depan)
+    { id: 'blackboard', type: 'board', x: 260, y: 18, w: 440, h: 46, solid: true, label: 'Papan Tulis' },
+    // Meja Guru (Kiri Depan)
+    { id: 'teacher_desk', type: 'teacher_desk', x: 115, y: 115, w: 145, h: 68, solid: true, label: 'Meja Bu Ratna' },
+    // Lemari Buku & Pojok Baca (Kanan Depan)
+    { id: 'bookshelf', type: 'bookshelf', x: 775, y: 78, w: 130, h: 48, solid: true, label: 'Lemari Buku' },
+    // Mading / Jadwal Piket (Kanan Atas)
+    { id: 'wall_board', type: 'mading', x: 785, y: 18, w: 110, h: 32, solid: true, label: 'Jadwal Piket' },
+    // Tong Sampah (Dekat Pintu Kiri Bawah)
+    { id: 'trash_can', type: 'trash', x: 64, y: 545, w: 38, h: 38, solid: true, label: 'Tong Sampah' },
+    // Dispenser & Galon Air (Pojok Kanan Bawah)
+    { id: 'dispenser', type: 'dispenser', x: 872, y: 530, w: 40, h: 55, solid: true, label: 'Dispenser Kelas' }
+];
+
+// Generate 9 Set Meja & Kursi Ganda Siswa (3 kolom x 3 baris)
+const deskCols = [165, 420, 675];
+const deskRows = [245, 365, 485];
+deskCols.forEach((dx, cIdx) => {
+    deskRows.forEach((dy, rIdx) => {
+        obstacles.push({
+            id: `desk_${cIdx}_${rIdx}`,
+            type: 'student_desk',
+            x: dx,
+            y: dy,
+            w: 116,
+            h: 52,
+            solid: true,
+            isPlayerDesk: (cIdx === 0 && rIdx === 2),
+            label: (cIdx === 0 && rIdx === 2) ? 'Meja Belajar Budi' : 'Meja Siswa'
+        });
+    });
+});
+
+// Karakter NPC (Guru & Teman Sekelas)
+const npcs = [
+    {
+        id: 'bu_ratna',
+        name: 'Bu Ratna (Wali Kelas)',
+        x: 170,
+        y: 82,
+        width: 30,
+        height: 36,
+        dir: 'down',
+        skinColor: '#f5cba7',
+        hairColor: '#3f2e21',
+        shirtColor: '#0d9488',
+        pantsColor: '#1e293b',
+        hasHijab: true,
+        hijabColor: '#fef3c7'
+    },
+    {
+        id: 'siti',
+        name: 'Siti (Ketua Kelas)',
+        x: 205,
+        y: 295,
+        width: 30,
+        height: 36,
+        dir: 'up',
+        skinColor: '#eab38f',
+        hairColor: '#1c1917',
+        shirtColor: '#ffffff',
+        pantsColor: '#334155',
+        hasHijab: true,
+        hijabColor: '#ffffff'
+    },
+    {
+        id: 'dimas',
+        name: 'Dimas (Sahabat Budi)',
+        x: 460,
+        y: 415,
+        width: 30,
+        height: 36,
+        dir: 'left',
+        skinColor: '#d99b72',
+        hairColor: '#09090b',
+        shirtColor: '#ffffff',
+        pantsColor: '#334155',
+        hasHijab: false
+    },
+    {
+        id: 'rina',
+        name: 'Rina (Seksi Kebersihan)',
+        x: 715,
+        y: 295,
+        width: 30,
+        height: 36,
+        dir: 'down',
+        skinColor: '#f5cba7',
+        hairColor: '#292524',
+        shirtColor: '#ffffff',
+        pantsColor: '#334155',
+        hasHijab: false
+    }
+];
+
+// Fungsi Menampilkan Toast Notifikasi
+let toastTimeout = null;
+function showToast(message) {
+    const toast = document.getElementById('toast-notif');
+    const toastText = document.getElementById('toast-text');
+    toastText.textContent = message;
+    toast.classList.remove('hidden');
+    clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(() => {
+        toast.classList.add('hidden');
+    }, 3000);
+}
+
+// Perbarui Tampilan HUD Misi
+function updateMissionHUD() {
+    const listEl = document.getElementById('mission-list');
+    const progEl = document.getElementById('mission-progress');
+    listEl.innerHTML = '';
+
+    let completedCount = 0;
+    missions.forEach((m) => {
+        if (m.done) completedCount++;
+        const li = document.createElement('li');
+        li.className = `flex items-center gap-1.5 ${m.done ? 'line-through text-emerald-400 opacity-80' : 'text-slate-200'}`;
+        li.innerHTML = `<span>${m.done ? '✅' : '⬜'}</span><span>${m.text}</span>`;
+        listEl.appendChild(li);
+    });
+
+    progEl.textContent = `${completedCount}/${missions.length}`;
+
+    if (completedCount === missions.length && !victoryShown) {
+        victoryShown = true;
+        setTimeout(() => {
+            document.getElementById('victory-modal').classList.remove('hidden');
+        }, 700);
+    }
+}
+
+// Tandai Misi Selesai
+function completeMission(id, toastMsg) {
+    const m = missions.find(item => item.id === id);
+    if (m && !m.done) {
+        m.done = true;
+        updateMissionHUD();
+        if (toastMsg) showToast(toastMsg);
+    }
+}
+
+// Membuka Kotak Dialog
+function openDialog(speaker, text, onClose = null) {
+    dialogState.active = true;
+    dialogState.speaker = speaker;
+    dialogState.text = text;
+    dialogState.onClose = onClose;
+
+    document.getElementById('dialog-speaker').textContent = speaker;
+    document.getElementById('dialog-content').textContent = text;
+    document.getElementById('dialog-box').classList.remove('hidden');
+
+    // Hentikan gerakan karakter saat dialog terbuka
+    keys.up = keys.down = keys.left = keys.right = false;
+}
+
+// Menutup Kotak Dialog
+function closeDialog() {
+    if (!dialogState.active) return;
+    dialogState.active = false;
+    document.getElementById('dialog-box').classList.add('hidden');
+    if (typeof dialogState.onClose === 'function') {
+        const callback = dialogState.onClose;
+        dialogState.onClose = null;
+        callback();
+    }
+    window.focus();
+    canvas.focus();
+}
+
+document.getElementById('dialog-close-btn').addEventListener('click', closeDialog);
+document.getElementById('btn-continue-play').addEventListener('click', () => {
+    document.getElementById('victory-modal').classList.add('hidden');
+    window.focus();
+    canvas.focus();
+});
+document.getElementById('btn-restart-game').addEventListener('click', () => {
+    missions.forEach(m => {
+        m.done = false;
+        if (m.id === 'friends') {
+            m.count = 0;
+            m.text = 'Sapa minimal 2 teman sekelas (0/2)';
+        }
+    });
+    inventory.hasHomework = true;
+    inventory.hasTrash = true;
+    inventory.borrowedPen = false;
+    inventory.talkedFriends.clear();
+    victoryShown = false;
+    player.x = 335;
+    player.y = 440;
+    player.dir = 'up';
+    updateMissionHUD();
+    document.getElementById('victory-modal').classList.add('hidden');
+    window.focus();
+    canvas.focus();
+    showToast('Misi diulang! Selamat bermain kembali.');
+});
+
+// Deteksi Objek / NPC Terdekat untuk Interaksi
+function getInteractableTarget() {
+    const reach = 38;
+    let checkBox = {
+        x: player.x,
+        y: player.y,
+        w: player.width,
+        h: player.height
+    };
+
+    if (player.dir === 'up') checkBox.y -= reach;
+    if (player.dir === 'down') checkBox.y += reach;
+    if (player.dir === 'left') checkBox.x -= reach;
+    if (player.dir === 'right') checkBox.x += reach;
+
+    // 1. Cek NPC terdekat
+    for (const npc of npcs) {
+        if (rectOverlap(checkBox, { x: npc.x - 10, y: npc.y - 10, w: npc.width + 20, h: npc.height + 20 })) {
+            return { kind: 'npc', data: npc };
+        }
+    }
+
+    // 2. Cek Objek kelas terdekat
+    for (const obj of obstacles) {
+        if (rectOverlap(checkBox, { x: obj.x - 8, y: obj.y - 8, w: obj.w + 16, h: obj.h + 16 })) {
+            return { kind: 'object', data: obj };
+        }
+    }
+
+    return null;
+}
+
+// Jalankan Aksi Interaksi
+function triggerInteraction() {
+    if (dialogState.active) {
+        closeDialog();
+        return;
+    }
+
+    const target = getInteractableTarget();
+    if (!target) {
+        showToast('Dekati teman, Bu Guru, papan tulis, atau meja untuk berinteraksi!');
+        return;
+    }
+
+    if (target.kind === 'npc') {
+        const npc = target.data;
+        // Arahkan pandangan NPC ke arah Budi
+        if (player.dir === 'up') npc.dir = 'down';
+        else if (player.dir === 'down') npc.dir = 'up';
+        else if (player.dir === 'left') npc.dir = 'right';
+        else if (player.dir === 'right') npc.dir = 'left';
+
+        if (npc.id === 'bu_ratna') {
+            if (inventory.hasHomework) {
+                openDialog(
+                    npc.name,
+                    'Selamat pagi, Budi! Wah, rajin sekali kamu sudah mengumpulkan buku PR Matematika tepat waktu. Silakan kembali belajar atau bantu temanmu ya!',
+                    () => {
+                        inventory.hasHomework = false;
+                        completeMission('teacher', 'Misi Selesai: PR berhasil dikumpulkan!');
+                    }
+                );
+            } else {
+                openDialog(
+                    npc.name,
+                    'Tugas PR kamu sudah Ibu terima tadi, Budi. Jangan lupa cek jadwal pelajaran di papan tulis untuk persiapan pelajaran berikutnya!'
+                );
+            }
+        } else if (npc.id === 'siti') {
+            recordFriendTalk('siti');
+            openDialog(
+                npc.name,
+                'Hai Budi! Sebagai ketua kelas, aku mau mengingatkan kalau hari ini jam ke-3 ada ulangan harian IPA. Kamu sudah baca rangkuman di lemari buku?'
+            );
+        } else if (npc.id === 'dimas') {
+            recordFriendTalk('dimas');
+            if (!inventory.borrowedPen) {
+                openDialog(
+                    npc.name,
+                    'Eh Bud! Untung kamu nyamperin. Ini pulpen cadanganku kalau kamu butuh buat mencatat di papan tulis. Nanti istirahat kita ke kantin bareng ya!',
+                    () => {
+                        inventory.borrowedPen = true;
+                        showToast('Mendapatkan Pulpen Cadangan dari Dimas 🖊️');
+                    }
+                );
+            } else {
+                openDialog(
+                    npc.name,
+                    'Gimana Bud, PR Matematika nomor 5 susah banget kan? Untung kamu sudah selesai duluan!'
+                );
+            }
+        } else if (npc.id === 'rina') {
+            recordFriendTalk('rina');
+            openDialog(
+                npc.name,
+                'Halo Budi! Hari ini jadwal piket kelompok kita lho. Kalau ada sampah kertas di saku atau kolong meja, langsung buang ke tong sampah di pojok kiri bawah ya!'
+            );
+        }
+    } else if (target.kind === 'object') {
+        const obj = target.data;
+        if (obj.id === 'blackboard') {
+            openDialog(
+                'Papan Tulis Kelas IX-A',
+                'Tertulis di papan: "JADWAL HARI INI: 1. Upacara Bendera | 2. Matematika (Kumpulkan PR!) | 3. IPA (Bab Tata Surya) | 4. Bahasa Indonesia".',
+                () => {
+                    completeMission('board', 'Misi Selesai: Jadwal pelajaran tercatat!');
+                }
+            );
+        } else if (obj.id === 'teacher_desk') {
+            if (inventory.hasHomework) {
+                openDialog(
+                    'Meja Bu Ratna',
+                    'Ada tumpukan buku PR Matematika di atas meja guru. Kamu meletakkan buku tugasmu dengan rapi di bagian paling atas!',
+                    () => {
+                        inventory.hasHomework = false;
+                        completeMission('teacher', 'Misi Selesai: PR dikumpulkan di meja guru!');
+                    }
+                );
+            } else {
+                openDialog(
+                    'Meja Bu Ratna',
+                    'Buku PR milikmu sudah berada di tumpukan tugas yang rapi di meja Bu Ratna.'
+                );
+            }
+        } else if (obj.id === 'trash_can') {
+            if (inventory.hasTrash) {
+                openDialog(
+                    'Tong Sampah Organik & Kertas',
+                    'Kamu membuang remasan kertas coretan bekas hitungan Matematika dari sakumu ke dalam tong sampah. Kelas jadi bersih!',
+                    () => {
+                        inventory.hasTrash = false;
+                        completeMission('trash', 'Misi Selesai: Kebersihan kelas terjaga!');
+                    }
+                );
+            } else {
+                openDialog(
+                    'Tong Sampah Kelas',
+                    'Tong sampah sudah bersih dan rapi. Terima kasih sudah menjaga kebersihan kelas!'
+                );
+            }
+        } else if (obj.id === 'bookshelf') {
+            openDialog(
+                'Lemari Pojok Baca',
+                'Berisi buku paket Kurikulum Merdeka, Kamus Besar Bahasa Indonesia, dan ensiklopedia sains. Kamu membaca sekilas bab Tata Surya untuk persiapan ulangan IPA!'
+            );
+        } else if (obj.id === 'wall_board') {
+            openDialog(
+                'Mading & Jadwal Piket',
+                'Daftar Piket Senin: Budi, Rina, Dimas, dan Siti. Motto Kelas IX-A: "Disiplin, Jujur, dan Berprestasi!"'
+            );
+        } else if (obj.id === 'dispenser') {
+            openDialog(
+                'Dispenser Air Minum',
+                'Kamu minum segelas air mineral segar. Semangat belajar pun kembali penuh!'
+            );
+        } else if (obj.isPlayerDesk) {
+            openDialog(
+                'Meja Belajar Budi',
+                'Ini bangku tempat dudukmu! Di dalam laci ada buku tulis, penggaris, dan kotak pensil kesayanganmu.'
+            );
+        } else {
+            openDialog(
+                'Meja & Kursi Siswa',
+                'Meja kayu berlapis pernis yang rapi. Siap digunakan untuk kegiatan belajar mengajar.'
+            );
+        }
+    }
+}
+
+// Catat Interaksi dengan Teman
+function recordFriendTalk(friendId) {
+    if (!inventory.talkedFriends.has(friendId)) {
+        inventory.talkedFriends.add(friendId);
+        const m = missions.find(item => item.id === 'friends');
+        if (m && !m.done) {
+            m.count = inventory.talkedFriends.size;
+            m.text = `Sapa minimal 2 teman sekelas (${Math.min(m.count, m.target)}/${m.target})`;
+            if (m.count >= m.target) {
+                completeMission('friends', 'Misi Selesai: Kamu akrab dengan teman sekelas!');
+            } else {
+                updateMissionHUD();
+                showToast(`Menyapa teman (${m.count}/${m.target})`);
+            }
+        }
+    }
+}
+
+// Normalisasi deteksi tombol keyboard (mendukung event.code & event.key)
+function handleKeyInput(e, isPressed) {
+    const key = (e.key || '').toLowerCase();
+    const code = e.code || '';
+
+    const isUp = key === 'arrowup' || key === 'w' || code === 'ArrowUp' || code === 'KeyW';
+    const isDown = key === 'arrowdown' || key === 's' || code === 'ArrowDown' || code === 'KeyS';
+    const isLeft = key === 'arrowleft' || key === 'a' || code === 'ArrowLeft' || code === 'KeyA';
+    const isRight = key === 'arrowright' || key === 'd' || code === 'ArrowRight' || code === 'KeyD';
+
+    if (isUp) {
+        if (isPressed) e.preventDefault();
+        keys.up = isPressed;
+    }
+    if (isDown) {
+        if (isPressed) e.preventDefault();
+        keys.down = isPressed;
+    }
+    if (isLeft) {
+        if (isPressed) e.preventDefault();
+        keys.left = isPressed;
+    }
+    if (isRight) {
+        if (isPressed) e.preventDefault();
+        keys.right = isPressed;
+    }
+
+    if (isPressed && (key === ' ' || key === 'enter' || code === 'Space' || code === 'Enter')) {
+        e.preventDefault();
+        triggerInteraction();
+    }
+    if (isPressed && (key === 'escape' || code === 'Escape') && dialogState.active) {
+        closeDialog();
+    }
+}
+
+// Event Listener Keyboard
+window.addEventListener('keydown', (e) => handleKeyInput(e, true), { passive: false });
+window.addEventListener('keyup', (e) => handleKeyInput(e, false));
+
+// Reset semua tombol saat jendela kehilangan fokus agar karakter tidak jalan sendiri
+window.addEventListener('blur', () => {
+    keys.up = false;
+    keys.down = false;
+    keys.left = false;
+    keys.right = false;
+});
+
+// Fokuskan otomatis saat klik di area game
+document.getElementById('game-wrapper').addEventListener('pointerdown', () => {
+    window.focus();
+    canvas.focus();
+});
+
+// Event Listener Tombol Virtual Sentuh menggunakan Pointer Events
+function bindTouchButton(id, dirKey) {
+    const btn = document.getElementById(id);
+    const start = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        keys[dirKey] = true;
+        btn.classList.add('active');
+    };
+    const end = (e) => {
+        e.preventDefault();
+        keys[dirKey] = false;
+        btn.classList.remove('active');
+    };
+    btn.addEventListener('pointerdown', start);
+    btn.addEventListener('pointerup', end);
+    btn.addEventListener('pointerleave', end);
+    btn.addEventListener('pointercancel', end);
+}
+
+bindTouchButton('btn-up', 'up');
+bindTouchButton('btn-down', 'down');
+bindTouchButton('btn-left', 'left');
+bindTouchButton('btn-right', 'right');
+
+const interactBtn = document.getElementById('btn-interact');
+interactBtn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    triggerInteraction();
+});
+
+// Cek Tabrakan (AABB Collision) dengan dinding, furnitur, dan NPC
+function rectOverlap(a, b) {
+    return (
+        a.x < b.x + b.w &&
+        a.x + a.w > b.x &&
+        a.y < b.y + b.h &&
+        a.y + a.h > b.y
+    );
+}
+
+function canMoveTo(newX, newY) {
+    // Hitbox kaki karakter agar terasa natural (2.5D top-down)
+    const hitbox = {
+        x: newX + 5,
+        y: newY + 18,
+        w: player.width - 10,
+        h: player.height - 18
+    };
+
+    // Batas Dinding Kelas
+    if (hitbox.x < 48 || hitbox.x + hitbox.w > WORLD_WIDTH - 48) return false;
+    if (hitbox.y < 68 || hitbox.y + hitbox.h > WORLD_HEIGHT - 36) return false;
+
+    // Tabrakan dengan Furnitur
+    for (const obj of obstacles) {
+        if (obj.solid && rectOverlap(hitbox, { x: obj.x, y: obj.y, w: obj.w, h: obj.h })) {
+            return false;
+        }
+    }
+
+    // Tabrakan dengan NPC
+    for (const npc of npcs) {
+        const npcBox = {
+            x: npc.x + 5,
+            y: npc.y + 18,
+            w: npc.width - 10,
+            h: npc.height - 18
+        };
+        if (rectOverlap(hitbox, npcBox)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+// Update Logika Permainan
+function update() {
+    if (dialogState.active) {
+        player.isMoving = false;
+        return;
+    }
+
+    let dx = 0;
+    let dy = 0;
+
+    if (keys.up) { dy -= 1; player.dir = 'up'; }
+    if (keys.down) { dy += 1; player.dir = 'down'; }
+    if (keys.left) { dx -= 1; player.dir = 'left'; }
+    if (keys.right) { dx += 1; player.dir = 'right'; }
+
+    if (dx !== 0 || dy !== 0) {
+        // Normalisasi kecepatan diagonal
+        const len = Math.hypot(dx, dy);
+        dx = (dx / len) * player.speed;
+        dy = (dy / len) * player.speed;
+
+        // Gerak terpisah sumbu X dan Y agar bisa meluncur mulus di pinggir meja
+        if (canMoveTo(player.x + dx, player.y)) {
+            player.x += dx;
+        }
+        if (canMoveTo(player.x, player.y + dy)) {
+            player.y += dy;
+        }
+
+        player.isMoving = true;
+        player.walkFrame += 0.22;
+    } else {
+        player.isMoving = false;
+        player.walkFrame = 0;
+    }
+}
+
+// ==========================================
+// FUNGSI MENGGAMBAR RUANG KELAS & KARAKTER
+// ==========================================
+
+function drawClassroom() {
+    // 1. Lantai Keramik Kelas (Pola Kotak Krem Cerah)
+    const tileSize = 48;
+    for (let y = 56; y < WORLD_HEIGHT - 24; y += tileSize) {
+        for (let x = 36; x < WORLD_WIDTH - 36; x += tileSize) {
+            const isAlt = ((x / tileSize) + (y / tileSize)) % 2 === 0;
+            ctx.fillStyle = isAlt ? '#f1f5f9' : '#e2e8f0';
+            ctx.fillRect(x, y, tileSize, tileSize);
+            ctx.strokeStyle = '#cbd5e1';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x, y, tileSize, tileSize);
+        }
+    }
+
+    // 2. Dinding Ruang Kelas (Bagian Atas & Samping)
+    ctx.fillStyle = '#fde68a'; // Cat dinding krem hangat khas sekolah
+    ctx.fillRect(0, 0, WORLD_WIDTH, 68);
+    // List biru bagian bawah dinding
+    ctx.fillStyle = '#1e3a8a';
+    ctx.fillRect(36, 58, WORLD_WIDTH - 72, 10);
+
+    // Dinding Kiri, Kanan, Bawah (Border Luar)
+    ctx.fillStyle = '#475569';
+    ctx.fillRect(0, 0, 36, WORLD_HEIGHT); // Kiri
+    ctx.fillRect(WORLD_WIDTH - 36, 0, 36, WORLD_HEIGHT); // Kanan
+    ctx.fillRect(0, WORLD_HEIGHT - 28, WORLD_WIDTH, 28); // Bawah
+
+    // 3. Jendela Kelas di Dinding Kanan (Cahaya Matahari Pagi)
+    const windowYs = [160, 320];
+    windowYs.forEach(wy => {
+        ctx.fillStyle = '#bae6fd';
+        ctx.fillRect(WORLD_WIDTH - 32, wy, 24, 110);
+        ctx.strokeStyle = '#78350f';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(WORLD_WIDTH - 32, wy, 24, 110);
+        // Sinar matahari masuk ke lantai
+        ctx.fillStyle = 'rgba(254, 249, 195, 0.25)';
+        ctx.beginPath();
+        ctx.moveTo(WORLD_WIDTH - 36, wy);
+        ctx.lineTo(WORLD_WIDTH - 160, wy + 30);
+        ctx.lineTo(WORLD_WIDTH - 160, wy + 140);
+        ctx.lineTo(WORLD_WIDTH - 36, wy + 110);
+        ctx.closePath();
+        ctx.fill();
+    });
+
+    // 4. Pintu Masuk Kelas di Dinding Kiri Bawah
+    ctx.fillStyle = '#92400e';
+    ctx.fillRect(10, 430, 26, 95);
+    ctx.fillStyle = '#fbbf24';
+    ctx.beginPath();
+    ctx.arc(30, 478, 3, 0, Math.PI * 2);
+    ctx.fill();
+    // Keset Pintu
+    ctx.fillStyle = '#991b1b';
+    ctx.fillRect(42, 442, 24, 72);
+    ctx.strokeStyle = '#fca5a5';
+    ctx.strokeRect(45, 445, 18, 66);
+
+    // 5. Lambang Garuda & Foto Presiden/Wapres di Atas Papan Tulis
+    ctx.fillStyle = '#f59e0b';
+    ctx.beginPath();
+    ctx.arc(WORLD_WIDTH / 2, 10, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(WORLD_WIDTH / 2 - 45, 4, 14, 12);
+    ctx.fillRect(WORLD_WIDTH / 2 + 31, 4, 14, 12);
+
+    // 6. Gambar Semua Furnitur Kelas
+    obstacles.forEach(obj => {
+        if (obj.type === 'board') {
+            // Papan Tulis Hijau
+            ctx.fillStyle = '#78350f'; // Bingkai kayu
+            ctx.fillRect(obj.x - 6, obj.y - 4, obj.w + 12, obj.h + 10);
+            ctx.fillStyle = '#065f46'; // Papan hijau tua
+            ctx.fillRect(obj.x, obj.y, obj.w, obj.h);
+            // Tulisan kapur putih
+            ctx.fillStyle = 'rgba(255,255,255,0.85)';
+            ctx.font = 'bold 12px monospace';
+            ctx.fillText('KELAS IX-A | JADWAL PELAJARAN', obj.x + 18, obj.y + 18);
+            ctx.font = '11px monospace';
+            ctx.fillText('1. MTK (Kumpulkan PR!)   2. IPA   3. B.INDO', obj.x + 18, obj.y + 35);
+            // Penghapus & Kapur di rak bawah
+            ctx.fillStyle = '#f8fafc';
+            ctx.fillRect(obj.x + 360, obj.y + obj.h - 4, 24, 6);
+        } else if (obj.type === 'teacher_desk') {
+            // Bayangan meja
+            ctx.fillStyle = 'rgba(0,0,0,0.15)';
+            ctx.fillRect(obj.x + 4, obj.y + 6, obj.w, obj.h);
+            // Meja Guru Kayu Jati
+            ctx.fillStyle = '#92400e';
+            ctx.fillRect(obj.x, obj.y, obj.w, obj.h);
+            ctx.strokeStyle = '#451a03';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(obj.x, obj.y, obj.w, obj.h);
+            // Taplak Meja Putih & Tumpukan Buku PR
+            ctx.fillStyle = '#f8fafc';
+            ctx.fillRect(obj.x + 15, obj.y + 12, 45, 36);
+            ctx.fillStyle = '#ef4444'; // Buku merah
+            ctx.fillRect(obj.x + 95, obj.y + 18, 28, 22);
+            ctx.fillStyle = '#3b82f6'; // Buku biru
+            ctx.fillRect(obj.x + 98, obj.y + 15, 26, 20);
+        } else if (obj.type === 'student_desk') {
+            // Kursi Siswa di belakang meja (2 kursi per meja ganda)
+            ctx.fillStyle = '#b45309';
+            ctx.fillRect(obj.x + 16, obj.y + obj.h - 4, 30, 14);
+            ctx.fillRect(obj.x + 70, obj.y + obj.h - 4, 30, 14);
+
+            // Bayangan Meja
+            ctx.fillStyle = 'rgba(0,0,0,0.14)';
+            ctx.fillRect(obj.x + 3, obj.y + 5, obj.w, obj.h);
+
+            // Permukaan Meja Siswa
+            ctx.fillStyle = obj.isPlayerDesk ? '#d97706' : '#b45309';
+            ctx.fillRect(obj.x, obj.y, obj.w, obj.h);
+            ctx.strokeStyle = '#78350f';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(obj.x, obj.y, obj.w, obj.h);
+
+            // Garis pemisah meja ganda
+            ctx.beginPath();
+            ctx.moveTo(obj.x + obj.w / 2, obj.y);
+            ctx.lineTo(obj.x + obj.w / 2, obj.y + obj.h);
+            ctx.stroke();
+
+            // Penanda Meja Budi
+            if (obj.isPlayerDesk) {
+                ctx.fillStyle = '#fef08a';
+                ctx.fillRect(obj.x + 14, obj.y + 14, 22, 16); // Buku tulis Budi
+                ctx.fillStyle = '#1e293b';
+                ctx.font = 'bold 9px sans-serif';
+                ctx.fillText('Meja Budi', obj.x + 8, obj.y + 42);
+            }
+        } else if (obj.type === 'bookshelf') {
+            ctx.fillStyle = '#78350f';
+            ctx.fillRect(obj.x, obj.y, obj.w, obj.h);
+            // Deretan buku warna-warni
+            const bookColors = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
+            for (let i = 0; i < 12; i++) {
+                ctx.fillStyle = bookColors[i % bookColors.length];
+                ctx.fillRect(obj.x + 8 + i * 9, obj.y + 10, 7, 28);
+            }
+        } else if (obj.type === 'mading') {
+            ctx.fillStyle = '#b45309';
+            ctx.fillRect(obj.x, obj.y, obj.w, obj.h);
+            ctx.fillStyle = '#fef3c7';
+            ctx.fillRect(obj.x + 6, obj.y + 5, 42, 22);
+            ctx.fillStyle = '#dbeafe';
+            ctx.fillRect(obj.x + 56, obj.y + 5, 46, 22);
+        } else if (obj.type === 'trash') {
+            ctx.fillStyle = '#16a34a';
+            ctx.beginPath();
+            ctx.arc(obj.x + obj.w / 2, obj.y + obj.h / 2, 18, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#14532d';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            ctx.fillStyle = '#052e16';
+            ctx.beginPath();
+            ctx.arc(obj.x + obj.w / 2, obj.y + obj.h / 2, 12, 0, Math.PI * 2);
+            ctx.fill();
+        } else if (obj.type === 'dispenser') {
+            ctx.fillStyle = '#e2e8f0';
+            ctx.fillRect(obj.x + 4, obj.y + 18, 32, 36);
+            ctx.fillStyle = '#38bdf8';
+            ctx.beginPath();
+            ctx.arc(obj.x + 20, obj.y + 14, 13, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    });
+}
+
+// Gambar Karakter Manusia 2D Top-Down (Budi, Guru, Teman)
+function drawCharacter(char, isPlayer = false) {
+    const bobOffset = char.isMoving ? Math.sin(char.walkFrame) * 2.5 : 0;
+    const legSwing = char.isMoving ? Math.sin(char.walkFrame) * 4 : 0;
+
+    const cx = char.x + char.width / 2;
+    const cy = char.y + char.height / 2;
+
+    // 1. Bayangan Kaki
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.28)';
+    ctx.beginPath();
+    ctx.ellipse(cx, char.y + char.height + 1, 13, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. Kaki / Sepatu Hitam Sekolah
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(char.x + 6, char.y + 28 + legSwing * 0.5, 7, 8);
+    ctx.fillRect(char.x + 17, char.y + 28 - legSwing * 0.5, 7, 8);
+
+    // 3. Celana / Rok Seragam
+    ctx.fillStyle = char.pantsColor;
+    ctx.fillRect(char.x + 6, char.y + 22 + bobOffset * 0.3, 18, 8);
+
+    // 4. Baju Seragam Putih / Batik Guru
+    ctx.fillStyle = char.shirtColor;
+    ctx.beginPath();
+    ctx.roundRect(char.x + 4, char.y + 12 + bobOffset * 0.5, 22, 13, 4);
+    ctx.fill();
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Dasi Biru/Merah untuk Siswa
+    if (char.shirtColor === '#ffffff' && char.dir !== 'up') {
+        ctx.fillStyle = '#1d4ed8';
+        ctx.fillRect(cx - 2, char.y + 14 + bobOffset * 0.5, 4, 8);
+    }
+
+    // 5. Kepala & Wajah
+    ctx.fillStyle = char.skinColor;
+    ctx.beginPath();
+    ctx.arc(cx, char.y + 8 + bobOffset * 0.6, 10, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 6. Rambut atau Hijab
+    if (char.hasHijab) {
+        ctx.fillStyle = char.hijabColor;
+        ctx.beginPath();
+        ctx.arc(cx, char.y + 8 + bobOffset * 0.6, 11.5, Math.PI * 0.85, Math.PI * 2.15);
+        ctx.fill();
+        ctx.fillRect(char.x + 3, char.y + 8 + bobOffset * 0.6, 24, 9);
+        // Wajah terlihat jika tidak menghadap atas
+        if (char.dir !== 'up') {
+            ctx.fillStyle = char.skinColor;
+            ctx.beginPath();
+            ctx.arc(cx, char.y + 9 + bobOffset * 0.6, 7.5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    } else {
+        ctx.fillStyle = char.hairColor;
+        ctx.beginPath();
+        if (char.dir === 'up') {
+            ctx.arc(cx, char.y + 8 + bobOffset * 0.6, 10.5, 0, Math.PI * 2);
+        } else {
+            ctx.arc(cx, char.y + 6 + bobOffset * 0.6, 10.5, Math.PI, Math.PI * 2);
+        }
+        ctx.fill();
+    }
+
+    // 7. Mata (Sesuai arah pandangan)
+    if (char.dir !== 'up') {
+        ctx.fillStyle = '#0f172a';
+        let eyeOffsetX = 0;
+        if (char.dir === 'left') eyeOffsetX = -3;
+        if (char.dir === 'right') eyeOffsetX = 3;
+
+        ctx.beginPath();
+        ctx.arc(cx - 3.5 + eyeOffsetX, char.y + 9 + bobOffset * 0.6, 1.5, 0, Math.PI * 2);
+        ctx.arc(cx + 3.5 + eyeOffsetX, char.y + 9 + bobOffset * 0.6, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // 8. Label Nama di Atas Kepala
+    ctx.font = 'bold 11px Fredoka, sans-serif';
+    const shortName = char.name.split(' ')[0];
+    const textWidth = ctx.measureText(shortName).width;
+
+    ctx.fillStyle = isPlayer ? 'rgba(245, 158, 11, 0.92)' : 'rgba(15, 23, 42, 0.78)';
+    ctx.beginPath();
+    ctx.roundRect(cx - textWidth / 2 - 6, char.y - 20 + bobOffset * 0.4, textWidth + 12, 15, 6);
+    ctx.fill();
+
+    ctx.fillStyle = isPlayer ? '#0f172a' : '#f8fafc';
+    ctx.textAlign = 'center';
+    ctx.fillText(shortName, cx, char.y - 9 + bobOffset * 0.4);
+    ctx.textAlign = 'left';
+}
+
+// Indikator Interaksi Melayang jika Budi dekat objek/NPC
+function drawInteractionPrompt() {
+    if (dialogState.active) return;
+    const target = getInteractableTarget();
+    if (!target) return;
+
+    let tx = 0;
+    let ty = 0;
+    let label = '';
+
+    if (target.kind === 'npc') {
+        tx = target.data.x + target.data.width / 2;
+        ty = target.data.y - 32;
+        label = `💬 Sapa ${target.data.name.split(' ')[0]}`;
+    } else {
+        tx = target.data.x + target.data.w / 2;
+        ty = target.data.y - 12;
+        label = `🔍 ${target.data.label}`;
+    }
+
+    const pulse = Math.sin(Date.now() / 180) * 3;
+    ctx.font = 'bold 11px Fredoka, sans-serif';
+    const w = ctx.measureText(label).width + 16;
+
+    ctx.fillStyle = '#f59e0b';
+    ctx.beginPath();
+    ctx.roundRect(tx - w / 2, ty - 14 + pulse, w, 20, 8);
+    ctx.fill();
+    ctx.strokeStyle = '#fef3c7';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.fillStyle = '#0f172a';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, tx, ty + pulse);
+    ctx.textAlign = 'left';
+}
+
+// Render Utama dengan Auto-Scaling ke Ukuran Layar
+function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Hitung skala proporsional (letterbox) agar seluruh kelas selalu terlihat utuh
+    const scaleX = canvas.width / WORLD_WIDTH;
+    const scaleY = canvas.height / WORLD_HEIGHT;
+    const scale = Math.min(scaleX, scaleY);
+
+    const offsetX = (canvas.width - WORLD_WIDTH * scale) / 2;
+    const offsetY = (canvas.height - WORLD_HEIGHT * scale) / 2;
+
+    ctx.save();
+    ctx.translate(offsetX, offsetY);
+    ctx.scale(scale, scale);
+
+    // Gambar Latar Ruang Kelas & Meja
+    drawClassroom();
+
+    // Urutkan karakter berdasarkan koordinat Y (Y-Sorting) agar kedalaman 2.5D akurat
+    const entities = [
+        { char: player, isPlayer: true },
+        ...npcs.map(n => ({ char: n, isPlayer: false }))
+    ];
+    entities.sort((a, b) => a.char.y - b.char.y);
+
+    entities.forEach(ent => drawCharacter(ent.char, ent.isPlayer));
+
+    // Gambar balon petunjuk interaksi
+    drawInteractionPrompt();
+
+    ctx.restore();
+}
+
+// Loop Animasi 60 FPS
+function gameLoop() {
+    update();
+    render();
+    requestAnimationFrame(gameLoop);
+}
+
+// Inisialisasi Game saat halaman dimuat
+function initGame() {
+    resizeCanvas();
+    updateMissionHUD();
+    window.focus();
+    canvas.focus();
+    gameLoop();
+}
+
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    initGame();
+} else {
+    window.addEventListener('DOMContentLoaded', initGame);
+}
+</script>
+</body>
+</html>
